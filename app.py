@@ -346,13 +346,14 @@ STEP_2_BLOCKS = [
     },
 ]
 
-FALLBACK_BLOCKS = [
+STEP_3_BLOCKS = [
     {
         "type": "text",
-        "content": "Thank you for the additional context. Let me analyze this further "
-        "and get back to you with updated recommendations.",
+        "content": "Done, you can see it on your dashboard. It will be updated daily at 5pm.",
     }
 ]
+
+FALLBACK_BLOCKS = STEP_3_BLOCKS
 
 
 def get_response_blocks(step):
@@ -362,7 +363,7 @@ def get_response_blocks(step):
         return STEP_1_BLOCKS
     if step == 2:
         return STEP_2_BLOCKS
-    return FALLBACK_BLOCKS
+    return STEP_3_BLOCKS
 
 
 # --- Thinking animation ---
@@ -591,7 +592,7 @@ def render_chart_scrap_trend(key_prefix=""):
 
 def render_blocks(blocks, streaming=False, step=0, key_prefix=""):
     """Render response blocks; stream text progressively when streaming=True."""
-    if streaming:
+    if streaming and step < 3:
         show_thinking(step)
     for block in blocks:
         if block["type"] == "text":
