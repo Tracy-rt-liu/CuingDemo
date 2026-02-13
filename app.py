@@ -3,6 +3,11 @@ import time
 import random
 import pandas as pd
 import altair as alt
+import io
+import re
+from fpdf import FPDF
+from pptx import Presentation
+from pptx.util import Inches, Pt
 
 st.set_page_config(layout="wide", page_title="Cuing Agent")
 
@@ -10,8 +15,152 @@ st.set_page_config(layout="wide", page_title="Cuing Agent")
 st.markdown("""
 <style>
 [data-testid="stHorizontalBlock"] { align-items: center; }
+.download-row { display: flex; align-items: center; gap: 8px; margin-top: -15px; margin-bottom: 25px; }
+.download-label { font-weight: 500; font-size: 0.85rem; color: white; background: #333; padding: 2px 8px; border-radius: 4px; margin-right: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+div.stDownloadButton > button { padding: 4px 10px !important; height: auto !important; min-height: unset !important; border: 1px solid #ddd !important; background: #fff !important; font-size: 1.2rem !important; border-radius: 4px !important; }
+div.stDownloadButton > button:hover { border-color: #1f77b4 !important; background: #f0f7ff !important; }
+.next-steps-container { border-top: 1px solid #eee; margin-top: 30px; padding-top: 20px; }
+.next-steps-title { font-weight: 600; color: #333; margin-bottom: 12px; }
+.summary-container { background: #fdfdfd; border: 1px solid #eef0f2; border-radius: 8px; padding: 24px; margin-top: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); width: 100%; }
+.summary-section-title { font-size: 1.2rem; font-weight: 700; color: #1f77b4; margin-bottom: 16px; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px; }
+.summary-item-header { font-weight: 600; color: #333; margin-top: 12px; margin-bottom: 4px; }
+.summary-item-text { color: #555; margin-bottom: 16px; line-height: 1.5; }
+.action-cat { font-weight: 600; color: #d62728; margin-top: 14px; margin-bottom: 6px; font-size: 0.9rem; text-transform: uppercase; }
+.future-analysis { background: #f0f7ff; border-left: 4px solid #1f77b4; padding: 12px; margin-top: 20px; font-size: 0.9rem; color: #444; }
+
+/* Icon Colors */
+.pdf-dl button { color: #d62728 !important; border-color: #ffcccc !important; background-color: #fff5f5 !important; }
+.pdf-dl button:hover { background-color: #ffecec !important; border-color: #d62728 !important; }
+.xls-dl button { color: #2ca02c !important; border-color: #ccffcc !important; background-color: #f5fff5 !important; }
+.xls-dl button:hover { background-color: #e6ff e6 !important; border-color: #2ca02c !important; }
+.ppt-dl button { color: #e67e22 !important; border-color: #ffe5cc !important; background-color: #fffaf5 !important; }
+.ppt-dl button:hover { background-color: #fff0e0 !important; border-color: #e67e22 !important; }
 </style>
 """, unsafe_allow_html=True)
+st.markdown("", unsafe_allow_html=True) # Spacer
+
+# --- Helper Functions for Exports ---
+def strip_emojis(text):
+    if not text:
+        return ""
+    # Remove non-ASCII characters (emojis) for FPDF compatibility
+    return re.sub(r'[^\x00-\x7F]+', '', text)
+
+def to_excel(df):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Sheet1')
+    return output.getvalue()
+
+def to_pdf(title, df, insights):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("helvetica", "B", 16)
+    pdf.cell(0, 10, strip_emojis(title), ln=True)
+    pdf.ln(5)
+    pdf.set_font("helvetica", "", 12)
+    pdf.multi_cell(0, 10, strip_emojis(insights))
+    pdf.ln(10)
+    
+    # Table headers
+    pdf.set_font("helvetica", "B", 10)
+    col_width = pdf.epw / len(df.columns)
+    for col in df.columns:
+        pdf.cell(col_width, 10, strip_emojis(str(col)), border=1)
+    pdf.ln()
+    
+    # Table rows
+    pdf.set_font("helvetica", "", 10)
+    for i in range(len(df)):
+        for col in df.columns:
+            val = df.iloc[i][col]
+            pdf.cell(col_width, 10, strip_emojis(str(val)), border=1)
+        pdf.ln()
+    return bytes(pdf.output())
+
+def to_ppt(title, df, insights):
+    prs = Presentation()
+    slide_layout = prs.slide_layouts[1] # Title and Content
+    slide = prs.slides.add_slide(slide_layout)
+    
+    slide.shapes.title.text = strip_emojis(title)
+    
+    # Insights box
+    content_box = slide.placeholders[1]
+    tf = content_box.text_frame
+    tf.text = strip_emojis(insights)
+    
+    # Add a table for data
+    rows, cols = len(df) + 1, len(df.columns)
+    left, top, width, height = Inches(0.5), Inches(2.5), Inches(9), Inches(4)
+    table = slide.shapes.add_table(rows, cols, left, top, width, height).table
+    
+    # Headers
+    for i, col in enumerate(df.columns):
+        table.cell(0, i).text = strip_emojis(str(col))
+    
+    # Rows
+    for r_idx, row in df.iterrows():
+        for c_idx, val in enumerate(row):
+            table.cell(r_idx + 1, c_idx).text = strip_emojis(str(val))
+            
+    output = io.BytesIO()
+    prs.save(output)
+    return output.getvalue()
+
+def render_executive_summary():
+    st.markdown("<div class='summary-container'>", unsafe_allow_html=True)
+    
+    st.markdown("<div class='summary-section-title'>📊 Executive Summary</div>", unsafe_allow_html=True)
+    
+    # Item 1
+    st.markdown("<p class='summary-item-header'>1. The OEE decline reflects a sustained performance degradation rather than normal operating variability.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='summary-item-text'>The 10.4 percentage point reduction is driven by measurable shifts in availability and quality, indicating a systemic issue rather than statistical fluctuation.</p>", unsafe_allow_html=True)
+    
+    # Item 2
+    st.markdown("<p class='summary-item-header'>2. Line 3 reliability deterioration is the primary operational constraint.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='summary-item-text'>Elevated unplanned downtime, reduced MTBF, and near-capacity utilization identify this asset as the bottleneck driving availability loss and throughput instability.</p>", unsafe_allow_html=True)
+    
+    # Item 3
+    st.markdown("<p class='summary-item-header'>3. The scrap increase has become financially material and requires intervention.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='summary-item-text'>The 2.7% rise in scrap equates to approximately $243K in annualized margin exposure, with an upward trend over the past six weeks.</p>", unsafe_allow_html=True)
+    
+    st.markdown("<div class='summary-section-title' style='margin-top: 30px;'>🚀 Recommended Actions</div>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("<p class='action-cat'>Immediate (0–2 weeks)</p>", unsafe_allow_html=True)
+        st.markdown("""
+        - Conduct focused maintenance audit on Line 3
+        - Increase daily scrap tracking by defect category
+        - Separate new hires to shadow shifts with highest yield stability
+        """)
+    with col2:
+        st.markdown("<p class='action-cat'>Near-Term (30 days)</p>", unsafe_allow_html=True)
+        st.markdown("""
+        - Implement daily OEE stand-up dashboard (shift-level)
+        - Track individual operator first-pass yield
+        - Conduct SMED review on micro-stoppages
+        """)
+    with col3:
+        st.markdown("<p class='action-cat'>Structural</p>", unsafe_allow_html=True)
+        st.markdown("""
+        - CapEx case for equipment refurbishment
+        - Install predictive maintenance sensor on press
+        - Formalize ramp KPI: "Time-to-95% Productivity"
+        """)
+        
+    st.markdown("""
+    <div class='future-analysis'>
+    <strong>I can add additional analysis below if helpful:</strong><br>
+    • Monte Carlo simulation for projected yield under different scenarios<br>
+    • Sensitivity analysis: “If availability improves 3pp → output impact = X”<br>
+    • Automated financial impact estimator<br>
+    • Benchmark comparison vs industry quartiles
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
 
 st.title("🏭 Cuing Agent")
 
@@ -242,7 +391,9 @@ THINKING_PHASES = {
         ("Preparing structured assessment summary for user confirmation...", 0.35),
     ],
 }
-THINKING_PHASES[2] = THINKING_PHASES[1]  # Reuse detailed phases for step 2
+THINKING_PHASES[2] = [
+    ("Creating data visualization...", 5.0),
+]
 
 
 def show_thinking(step=0):
@@ -350,12 +501,12 @@ def render_chart_oee_waterfall():
     data["start"] = starts
     data["end"] = ends
     data["color"] = data["type"].apply(lambda x: "#1f77b4" if x == "total" else "#ff7f0e")
-
+    
     c = (
         alt.Chart(data)
         .mark_bar()
         .encode(
-            x=alt.X("label", sort=None, title=None),
+            x=alt.X("label", sort=None, title=None, axis=alt.Axis(labelAngle=0)),
             y=alt.Y("start", title="OEE %"),
             y2="end",
             color=alt.Color("color", scale=None),
@@ -364,6 +515,7 @@ def render_chart_oee_waterfall():
         .properties(height=300)
     )
     st.altair_chart(c, use_container_width=True)
+    return data
 
 
 def render_chart_asset_performance():
@@ -377,7 +529,7 @@ def render_chart_asset_performance():
         alt.Chart(data)
         .mark_bar()
         .encode(
-            x=alt.X("metric", sort=None, title=None),
+            x=alt.X("metric", sort=None, title=None, axis=alt.Axis(labelAngle=0)),
             y=alt.Y("value", title="Value"),
             color=alt.value("#1f77b4"),
             tooltip=["metric", "value", "unit"],
@@ -385,45 +537,56 @@ def render_chart_asset_performance():
         .properties(height=300)
     )
     st.altair_chart(c, use_container_width=True)
+    return data
 
 
 def render_chart_scrap_trend(key_prefix=""):
-    # Toggle for duration
-    view_option = st.radio(
-        "Select duration:",
-        ["6 Weeks", "8 Weeks"],
-        horizontal=True,
-        key=f"scrap_view_toggle_{key_prefix}",
-    )
+    # Layout for numeric input
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        st.markdown("<div style='padding-top: 10px;'>Select duration (Weeks):</div>", unsafe_allow_html=True)
+    with c2:
+        num_weeks = st.number_input(
+            "Select duration (Weeks):",
+            min_value=1,
+            max_value=12,
+            value=6,
+            step=1,
+            key=f"scrap_view_input_{key_prefix}",
+            label_visibility="collapsed"
+        )
     
-    weeks = 8 if view_option == "8 Weeks" else 6
+    weeks = num_weeks
     
     # Data
     data = pd.DataFrame({
         "Week": range(1, 9),
         "Scrap %": [3.8, 4.1, 4.4, 4.8, 5.7, 6.5, 6.2, 6.0],
-        "Margin Loss": [0, 3600, 7200, 14400, 21600, 29700, 26400, 24000],
+        "Margin Loss ($k)": [0, 3.6, 7.2, 14.4, 21.6, 29.7, 26.4, 24.0],
     })
     data = data[data["Week"] <= weeks]
     
-    base = alt.Chart(data).encode(x="Week:O")
+    base = alt.Chart(data).encode(x=alt.X("Week:O", axis=alt.Axis(labelAngle=0)))
 
     line_scrap = base.mark_line(color="#ff7f0e").encode(
-        y=alt.Y("Scrap %", title="Scrap %", axis=alt.Axis(titleColor="#ff7f0e")),
+        y=alt.Y("Scrap %:Q", title="Scrap %", axis=alt.Axis(titleColor="#ff7f0e", orient='left')),
         tooltip=["Week", "Scrap %"]
     )
     
     line_margin = base.mark_line(color="#1f77b4", strokeDash=[5, 5]).encode(
-        y=alt.Y("Margin Loss", title="Weekly Margin Loss ($)", axis=alt.Axis(titleColor="#1f77b4")),
-        tooltip=["Week", "Margin Loss"]
+        y=alt.Y("Margin Loss ($k):Q", title="Weekly Margin Loss ($k)", axis=alt.Axis(titleColor="#1f77b4", orient='right')),
+        tooltip=["Week", "Margin Loss ($k)"]
     )
     
-    # Baseline annotation (3.8%)
-    rule = alt.Chart(pd.DataFrame({"y": [3.8]})).mark_rule(strokeDash=[2, 2], color="gray").encode(y="y")
+    # Baseline annotation (3.8%) - share left axis scale but suppress redundant label
+    rule = alt.Chart(pd.DataFrame({"Scrap %": [3.8]})).mark_rule(strokeDash=[2, 2], color="gray").encode(
+        y=alt.Y("Scrap %:Q", axis=None)
+    )
 
     c = alt.layer(line_scrap, line_margin, rule).resolve_scale(y="independent").properties(height=350)
     
     st.altair_chart(c, use_container_width=True)
+    return data
 
 
 def render_blocks(blocks, streaming=False, step=0, key_prefix=""):
@@ -442,12 +605,32 @@ def render_blocks(blocks, streaming=False, step=0, key_prefix=""):
             render_questions(block["items"])
         elif block["type"] == "chart":
             st.subheader(block["title"])
+            df = None
             if block["chart_type"] == "oee_waterfall":
-                render_chart_oee_waterfall()
+                df = render_chart_oee_waterfall()
             elif block["chart_type"] == "asset_performance":
-                render_chart_asset_performance()
+                df = render_chart_asset_performance()
             elif block["chart_type"] == "scrap_trend":
-                render_chart_scrap_trend(key_prefix)
+                df = render_chart_scrap_trend(key_prefix)
+            
+            # Download Section
+            if df is not None:
+                cols = st.columns([1.5, 0.6, 0.6, 0.6, 6.7])
+                with cols[0]:
+                    st.markdown("<div style='padding-top: 6px;'><span class='download-label'>Download:</span></div>", unsafe_allow_html=True)
+                with cols[1]:
+                    st.markdown('<div class="pdf-dl">', unsafe_allow_html=True)
+                    st.download_button("📄", data=to_pdf(block["title"], df, block["commentary"]), file_name=f"{block['chart_type']}.pdf", key=f"dl_pdf_{block['chart_type']}_{key_prefix}", help="Download PDF Report")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                with cols[2]:
+                    st.markdown('<div class="xls-dl">', unsafe_allow_html=True)
+                    st.download_button("📊", data=to_excel(df), file_name=f"{block['chart_type']}.xlsx", key=f"dl_xls_{block['chart_type']}_{key_prefix}", help="Download Excel Data")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                with cols[3]:
+                    st.markdown('<div class="ppt-dl">', unsafe_allow_html=True)
+                    st.download_button("📽️", data=to_ppt(block["title"], df, block["commentary"]), file_name=f"{block['chart_type']}.pptx", key=f"dl_ppt_{block['chart_type']}_{key_prefix}", help="Download PPT Slides")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
 
             if streaming:
                 st.write_stream(text_generator(block["commentary"]))
@@ -469,6 +652,21 @@ for i, msg in enumerate(st.session_state.messages):
             if should_stream:
                 st.session_state.streaming_done = True  # prevent re-stream on rerun
             render_blocks(blocks, streaming=should_stream, step=msg.get("step", 0), key_prefix=str(i))
+            
+            # Next Steps Section (Only after Step 2: Analysis)
+            if msg.get("step", 0) == 2:
+                st.markdown("<div class='next-steps-container'></div>", unsafe_allow_html=True)
+                st.markdown("<p class='next-steps-title'>Next, do you want me to:</p>", unsafe_allow_html=True)
+                
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.checkbox("1. Make edits to these charts", key=f"next_edits_{i}"):
+                        st.info("I'm ready to help you refine these visualizations. What changes would you like to see?")
+                with c2:
+                    show_summary = st.checkbox("2. Output Executive Summary and Recommended Actions", key=f"next_summary_{i}")
+                
+                if show_summary:
+                    render_executive_summary()
 
 # --- Chat Input ---
 user_input = st.chat_input("Ask about yield performance...")
