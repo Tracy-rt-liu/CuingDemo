@@ -11,33 +11,7 @@ from pptx.util import Inches, Pt
 
 st.set_page_config(layout="wide", page_title="Cuing Agent")
 
-# --- Custom CSS ---
-st.markdown("""
-<style>
-[data-testid="stHorizontalBlock"] { align-items: center; }
-.download-row { display: flex; align-items: center; gap: 8px; margin-top: -15px; margin-bottom: 25px; }
-.download-label { font-weight: 500; font-size: 0.85rem; color: white; background: #333; padding: 2px 8px; border-radius: 4px; margin-right: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-div.stDownloadButton > button { padding: 4px 10px !important; height: auto !important; min-height: unset !important; border: 1px solid #ddd !important; background: #fff !important; font-size: 1.2rem !important; border-radius: 4px !important; }
-div.stDownloadButton > button:hover { border-color: #1f77b4 !important; background: #f0f7ff !important; }
-.next-steps-container { border-top: 1px solid #eee; margin-top: 30px; padding-top: 20px; }
-.next-steps-title { font-weight: 600; color: #333; margin-bottom: 12px; }
-.summary-container { background: #fdfdfd; border: 1px solid #eef0f2; border-radius: 8px; padding: 24px; margin-top: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); width: 100%; }
-.summary-section-title { font-size: 1.2rem; font-weight: 700; color: #1f77b4; margin-bottom: 16px; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px; }
-.summary-item-header { font-weight: 600; color: #333; margin-top: 12px; margin-bottom: 4px; }
-.summary-item-text { color: #555; margin-bottom: 16px; line-height: 1.5; }
-.action-cat { font-weight: 600; color: #d62728; margin-top: 14px; margin-bottom: 6px; font-size: 0.9rem; text-transform: uppercase; }
-.future-analysis { background: #f0f7ff; border-left: 4px solid #1f77b4; padding: 12px; margin-top: 20px; font-size: 0.9rem; color: #444; }
 
-/* Icon Colors */
-.pdf-dl button { color: #d62728 !important; border-color: #ffcccc !important; background-color: #fff5f5 !important; }
-.pdf-dl button:hover { background-color: #ffecec !important; border-color: #d62728 !important; }
-.xls-dl button { color: #2ca02c !important; border-color: #ccffcc !important; background-color: #f5fff5 !important; }
-.xls-dl button:hover { background-color: #e6ff e6 !important; border-color: #2ca02c !important; }
-.ppt-dl button { color: #e67e22 !important; border-color: #ffe5cc !important; background-color: #fffaf5 !important; }
-.ppt-dl button:hover { background-color: #fff0e0 !important; border-color: #e67e22 !important; }
-</style>
-""", unsafe_allow_html=True)
-st.markdown("", unsafe_allow_html=True) # Spacer
 
 # --- Helper Functions for Exports ---
 def strip_emojis(text):
@@ -668,9 +642,13 @@ for i, msg in enumerate(st.session_state.messages):
                 
                 if show_summary:
                     render_executive_summary()
+            
+            # Final Dashboard Link (Only after everything is done)
+            if msg.get("step", 0) == 3 or (msg.get("step", 0) == 2 and st.session_state.step > 2):
+                 st.link_button("🚀 Jump to Executive Dashboard", "http://localhost:5175", use_container_width=True)
 
 # --- Chat Input ---
-user_input = st.chat_input("Ask about yield performance...")
+user_input = st.chat_input("")
 
 if user_input:
     current_step = st.session_state.step
